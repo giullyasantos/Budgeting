@@ -1028,6 +1028,7 @@
                 <button class="menu-item" onclick="exportData(); closeMenuSheet()">💾 Export Data</button>
                 <button class="menu-item" onclick="closeMenuSheet(); setTimeout(() => document.getElementById('importFile').click(), 50)">📂 Import Data</button>
                 <button class="menu-item" onclick="toggleTheme()">🌓 Toggle Theme</button>
+                <button class="menu-item" id="notifBtnMenu" onclick="closeMenuSheet(); setTimeout(enableNotifications, 50)">🔔 Enable Notifications</button>
             </div>
         </div>
     </div>
@@ -2266,10 +2267,11 @@
                 await navigator.serviceWorker.register('/sw.js');
                 await navigator.serviceWorker.ready;
                 // Update button state based on current permission
-                const btn = document.getElementById('notifBtn');
                 if (Notification.permission === 'granted') {
-                    btn.textContent = '🔔 Notifications On';
-                    btn.disabled = true;
+                    const btn = document.getElementById('notifBtn');
+                    if (btn) { btn.textContent = '🔔 Notifications On'; btn.disabled = true; }
+                    const btnMenu = document.getElementById('notifBtnMenu');
+                    if (btnMenu) { btnMenu.textContent = '🔔 Notifications On'; btnMenu.disabled = true; }
                 }
             } catch (e) {
                 console.warn('Service worker registration failed', e);
@@ -2299,8 +2301,9 @@
                     body: JSON.stringify(sub.toJSON())
                 });
                 const btn = document.getElementById('notifBtn');
-                btn.textContent = '🔔 Notifications On';
-                btn.disabled = true;
+                if (btn) { btn.textContent = '🔔 Notifications On'; btn.disabled = true; }
+                const btnMenu = document.getElementById('notifBtnMenu');
+                if (btnMenu) { btnMenu.textContent = '🔔 Notifications On'; btnMenu.disabled = true; }
             } catch (e) {
                 console.warn('Push registration failed', e);
                 alert('Could not enable notifications: ' + e.message);
