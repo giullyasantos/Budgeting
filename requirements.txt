@@ -3,3 +3,4 @@ uvicorn==0.32.1
 pydantic==2.10.3
 upstash-redis==1.1.0
 mangum==0.17.0
+pywebpush==2.0.0

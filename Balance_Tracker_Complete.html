@@ -6,6 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Balance Tracker 2026-2027</title>
+    <link rel="manifest" href="/manifest.json">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         * {
@@ -2249,6 +2250,42 @@
             }
         }
 
+        const VAPID_PUBLIC_KEY = 'BIKY1BEBNt2tLfU6jgeC-Dr9UQvU-r-jA5LbJwPFIAene_IlPDpdk7R_OSKQ22hzdeLHBhzEz6n91gkOOdeVxu4';
+
+        function urlBase64ToUint8Array(base64String) {
+            const padding = '='.repeat((4 - base64String.length % 4) % 4);
+            const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+            const raw = atob(base64);
+            return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+        }
+
+        async function registerPush() {
+            if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+            try {
+                const reg = await navigator.serviceWorker.register('/sw.js');
+                await navigator.serviceWorker.ready;
+
+                const permission = await Notification.requestPermission();
+                if (permission !== 'granted') return;
+
+                const existing = await reg.pushManager.getSubscription();
+                if (existing) return;
+
+                const sub = await reg.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+                });
+
+                await fetch('/api/subscribe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(sub.toJSON())
+                });
+            } catch (e) {
+                console.warn('Push registration failed', e);
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', async () => {
             const savedTheme = localStorage.getItem('theme') || 'dark';
             document.documentElement.setAttribute('data-theme', savedTheme);
@@ -2259,6 +2296,7 @@
             renderCalendar();
             initSheetSwipe();
             initMonthSwipe();
+            registerPush();
         });
 
         document.addEventListener('keydown', e => {
