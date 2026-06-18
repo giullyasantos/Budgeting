@@ -1,15 +1,12 @@
 {
   "version": 2,
   "builds": [
-    { "src": "api/index.py",  "use": "@vercel/python" },
-    { "src": "api/notify.py", "use": "@vercel/python" },
+    { "src": "api/index.py", "use": "@vercel/python" },
     { "src": "Balance_Tracker_Complete.html", "use": "@vercel/static" },
     { "src": "sw.js",         "use": "@vercel/static" },
     { "src": "manifest.json", "use": "@vercel/static" }
   ],
   "routes": [
-    { "src": "/api/subscribe", "dest": "api/notify.py" },
-    { "src": "/api/notify",    "dest": "api/notify.py" },
     { "src": "/api/(.*)",      "dest": "api/index.py"  },
     { "src": "/sw.js",         "dest": "sw.js"         },
     { "src": "/manifest.json", "dest": "manifest.json" },
