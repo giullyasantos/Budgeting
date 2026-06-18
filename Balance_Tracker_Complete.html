@@ -1600,12 +1600,14 @@
             const today = new Date();
             const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-            // Determine cutoff: end of selected month, but never beyond today
+            // Balance cutoff: end of selected month, but never beyond today
             const [selMonthName, selYearStr] = currentMonth.split('-');
             const selMonthNum = monthNames.indexOf(selMonthName);
             const selYear = parseInt(selYearStr);
             const lastDayOfSelMonth = new Date(selYear, selMonthNum + 1, 0);
-            const cutoff = lastDayOfSelMonth < today ? lastDayOfSelMonth : today;
+            const balanceCutoff = lastDayOfSelMonth < today ? lastDayOfSelMonth : today;
+            // Savings cutoff: all logged entries up to end of selected month (no today cap)
+            const savingsCutoff = lastDayOfSelMonth;
 
             MONTHS.forEach(monthKey => {
                 const [monthName, yearStr] = monthKey.split('-');
@@ -1618,14 +1620,17 @@
                         const dayNum = parseInt(day);
                         const date = new Date(year, monthNum, dayNum);
 
-                        if (date <= cutoff) {
+                        if (date <= balanceCutoff) {
                             monthData[day].forEach(t => {
                                 if (t.type === 'income') balance += t.amount;
                                 else if (t.type === 'expense') balance -= t.amount;
-                                else if (t.type === 'savings') {
-                                    balance -= t.amount;
-                                    totalSavings += t.amount;
-                                }
+                                else if (t.type === 'savings') balance -= t.amount;
+                            });
+                        }
+
+                        if (date <= savingsCutoff) {
+                            monthData[day].forEach(t => {
+                                if (t.type === 'savings') totalSavings += t.amount;
                             });
                         }
                     });
