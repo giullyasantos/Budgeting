@@ -1622,18 +1622,14 @@
                             monthData[day].forEach(t => {
                                 if (t.type === 'income') balance += t.amount;
                                 else if (t.type === 'expense') balance -= t.amount;
-                                else if (t.type === 'savings') balance -= t.amount;
+                                else if (t.type === 'savings') {
+                                    balance -= t.amount;
+                                    totalSavings += t.amount;
+                                }
                             });
                         }
                     });
                 }
-            });
-
-            // Sum contributions up to the cutoff date
-            Object.values(data.savingsGoals || {}).forEach(goal => {
-                (goal.contributions || []).forEach(c => {
-                    if (new Date(c.date) <= cutoff) totalSavings += c.amount;
-                });
             });
 
             document.getElementById('currentBalance').textContent = `$${balance.toFixed(2)}`;
