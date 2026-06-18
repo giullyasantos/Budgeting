@@ -1346,10 +1346,9 @@
         async function loadData() {
             try {
                 const apiData = await API.getData();
-                // Always start with empty months and rebuild from recurring
                 data = {
                     startingBalance: apiData.startingBalance || 0,
-                    months: {},  // Start fresh
+                    months: apiData.months || {},
                     savingsGoals: apiData.savingsGoals || {},
                     recurringTransactions: apiData.recurringTransactions || []
                 };
@@ -1359,7 +1358,7 @@
                     const savedData = JSON.parse(saved);
                     data = {
                         startingBalance: savedData.startingBalance || 0,
-                        months: {},  // Start fresh
+                        months: savedData.months || {},
                         savingsGoals: savedData.savingsGoals || {},
                         recurringTransactions: savedData.recurringTransactions || []
                     };
