@@ -127,7 +127,7 @@ async def subscribe(request: Request):
 
 
 @app.get("/api/notify")
-async def notify(test: bool = False):
+async def notify(test: bool = False, test_bill: bool = False, test_sunday: bool = False):
     subs = get_subscriptions()
     if not subs:
         return {"message": "No subscribers — open the app and tap Enable Notifications first"}
@@ -136,6 +136,16 @@ async def notify(test: bool = False):
         for sub in subs:
             send_push(sub, "Test Notification ✅", "Push notifications are working!")
         return {"message": f"Test sent to {len(subs)} subscriber(s)"}
+
+    if test_bill:
+        for sub in subs:
+            send_push(sub, "Bill Due Tomorrow 💸", "Light bill — $180.00 due June 22")
+        return {"message": f"Test bill reminder sent to {len(subs)} subscriber(s)"}
+
+    if test_sunday:
+        for sub in subs:
+            send_push(sub, "Weekly Budget Review 📊", "Take a moment to review your budget and make sure your numbers look right!")
+        return {"message": f"Test Sunday reminder sent to {len(subs)} subscriber(s)"}
 
     tracker = load_data()
     recurring = tracker.get("recurringTransactions", [])
