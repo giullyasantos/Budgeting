@@ -1372,9 +1372,9 @@
                 }
             }
 
-            // Initialize empty months structure
+            // Ensure all months exist without wiping existing entries
             MONTHS.forEach(month => {
-                data.months[month] = {};
+                if (!data.months[month]) data.months[month] = {};
             });
 
             // Apply recurring transactions to populate calendar
