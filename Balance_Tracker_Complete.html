@@ -1331,6 +1331,12 @@
                         const actualDay = rt.id === 'paycheck-15th'
                             ? toPrevFridayIfWeekend(year, monthNum, rt.dayOfMonth)
                             : rt.dayOfMonth;
+                        // Remove stale entry on the original weekend day if we shifted
+                        if (actualDay !== rt.dayOfMonth && data.months[monthKey][rt.dayOfMonth]) {
+                            data.months[monthKey][rt.dayOfMonth] = data.months[monthKey][rt.dayOfMonth].filter(t =>
+                                !(t.description === rt.description && t.amount === rt.amount && t.type === rt.type && t.recurring === true)
+                            );
+                        }
                         applyToSpecificDay(rt, monthKey, actualDay);
                     }
                     // Branch 2: Monthly with null/undefined dayOfMonth = last business day of month
