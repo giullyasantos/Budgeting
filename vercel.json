@@ -1,11 +1,23 @@
 {
-  "experimentalServices": {
-    "frontend": {
-      "routePrefix": "/"
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/index.py",
+      "use": "@vercel/python"
     },
-    "backend": {
-      "root": "backend",
-      "routePrefix": "/_/backend"
+    {
+      "src": "Balance_Tracker_Complete.html",
+      "use": "@vercel/static"
     }
-  }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "api/index.py"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "Balance_Tracker_Complete.html"
+    }
+  ]
 }
