@@ -1,0 +1,27 @@
+# Python
+backend/venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Data & secrets (don't commit personal financial data or API keys)
+backend/tracker_data.json
+backend/work_data.json
+backend/spiritual_data.json
+backend/personal_data.json
+.env
+
+# Claude Code config
+.claude/
+
+# Archive of old versions
+idek/
+
+# OS
+.DS_Store
+Thumbs.db
