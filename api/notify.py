@@ -86,7 +86,15 @@ async def subscribe(request: Request):
 
 
 @app.get("/api/notify")
-async def notify():
+async def notify(test: bool = False):
+    if test:
+        subs = get_subscriptions()
+        if not subs:
+            return {"message": "No subscribers — open the app on your phone first and allow notifications"}
+        for sub in subs:
+            send_push(sub, "Test Notification ✅", "Push notifications are working!")
+        return {"message": f"Test sent to {len(subs)} subscriber(s)"}
+
     subs = get_subscriptions()
     if not subs:
         return {"message": "No subscribers"}
