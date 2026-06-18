@@ -1304,7 +1304,8 @@
                     type: rt.type,
                     description: rt.description,
                     amount: rt.amount,
-                    recurring: true
+                    recurring: true,
+                    recurringId: rt.id || null
                 });
             }
         }
@@ -1988,6 +1989,24 @@
                     deleteBtn.textContent = 'Delete';
                     deleteBtn.onclick = () => deleteTransaction(index);
                     item.appendChild(deleteBtn);
+                } else {
+                    const btnRow = document.createElement('div');
+                    btnRow.style.cssText = 'display:flex; gap:0.5rem; margin-top:0.5rem;';
+
+                    const deleteDayBtn = document.createElement('button');
+                    deleteDayBtn.className = 'delete-btn';
+                    deleteDayBtn.textContent = 'Delete This Day';
+                    deleteDayBtn.onclick = () => deleteTransaction(index);
+
+                    const deleteAllBtn = document.createElement('button');
+                    deleteAllBtn.className = 'delete-btn';
+                    deleteAllBtn.style.background = 'var(--accent-expense)';
+                    deleteAllBtn.textContent = 'Delete All';
+                    deleteAllBtn.onclick = () => deleteRecurringAll(t.recurringId || t.description, t.amount, t.type);
+
+                    btnRow.appendChild(deleteDayBtn);
+                    btnRow.appendChild(deleteAllBtn);
+                    item.appendChild(btnRow);
                 }
 
                 list.appendChild(item);
@@ -2005,6 +2024,34 @@
             if (selectedDay !== null && selectedMonth === currentMonth) {
                 selectDay(selectedDay, currentMonth);
             }
+        }
+
+        async function deleteRecurringAll(recurringId, amount, type) {
+            if (!confirm('Delete this recurring transaction and remove it from all months?')) return;
+
+            // Remove from recurringTransactions list by id or by description+amount+type
+            data.recurringTransactions = data.recurringTransactions.filter(rt =>
+                recurringId ? rt.id !== recurringId : !(rt.description === recurringId && rt.amount === amount && rt.type === type)
+            );
+
+            // Remove all occurrences from every month
+            Object.keys(data.months).forEach(monthKey => {
+                Object.keys(data.months[monthKey]).forEach(day => {
+                    data.months[monthKey][day] = data.months[monthKey][day].filter(t => {
+                        if (!t.recurring) return true;
+                        if (recurringId) return t.recurringId !== recurringId;
+                        return !(t.description === recurringId && t.amount === amount && t.type === type);
+                    });
+                    if (data.months[monthKey][day].length === 0) {
+                        delete data.months[monthKey][day];
+                    }
+                });
+            });
+
+            await saveData();
+            renderTransactionList();
+            renderCalendar();
+            renderRecurringList();
         }
 
         function openSavingsModal()   { openSavingsSheet(); }
@@ -2179,9 +2226,14 @@
                     <div class="transaction-desc">${r.description}</div>
                     <div class="transaction-meta">
                         <span class="meta-badge">${r.frequency}</span>
-                        ${r.day ? `<span class="meta-badge">Day ${r.day === -1 ? 'Last Business' : r.day}</span>` : ''}
+                        ${r.dayOfMonth ? `<span class="meta-badge">Day ${r.dayOfMonth}</span>` : ''}
                     </div>
                 `;
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'delete-btn';
+                deleteBtn.textContent = 'Delete Recurring';
+                deleteBtn.onclick = () => deleteRecurringAll(r.id, r.amount, r.type);
+                item.appendChild(deleteBtn);
                 list.appendChild(item);
             });
         }
