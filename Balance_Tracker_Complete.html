@@ -988,6 +988,7 @@
             <button class="btn" onclick="document.getElementById('importFile').click()">📂 Import</button>
             <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
             <button class="btn" onclick="toggleTheme()"><span id="themeIcon">☀️</span> Theme</button>
+            <button class="btn" id="notifBtn" onclick="enableNotifications()">🔔 Enable Notifications</button>
         </div>
 
         <div class="month-nav" id="monthNav">
@@ -2262,27 +2263,47 @@
         async function registerPush() {
             if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
             try {
-                const reg = await navigator.serviceWorker.register('/sw.js');
+                await navigator.serviceWorker.register('/sw.js');
                 await navigator.serviceWorker.ready;
+                // Update button state based on current permission
+                const btn = document.getElementById('notifBtn');
+                if (Notification.permission === 'granted') {
+                    btn.textContent = '🔔 Notifications On';
+                    btn.disabled = true;
+                }
+            } catch (e) {
+                console.warn('Service worker registration failed', e);
+            }
+        }
 
+        async function enableNotifications() {
+            if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+                alert('Push notifications are not supported on this browser.');
+                return;
+            }
+            try {
+                const reg = await navigator.serviceWorker.ready;
                 const permission = await Notification.requestPermission();
-                if (permission !== 'granted') return;
-
+                if (permission !== 'granted') {
+                    alert('Notification permission denied. Enable it in Settings → Safari → your site.');
+                    return;
+                }
                 const existing = await reg.pushManager.getSubscription();
-                if (existing) return;
-
-                const sub = await reg.pushManager.subscribe({
+                const sub = existing || await reg.pushManager.subscribe({
                     userVisibleOnly: true,
                     applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
                 });
-
                 await fetch('/api/subscribe', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(sub.toJSON())
                 });
+                const btn = document.getElementById('notifBtn');
+                btn.textContent = '🔔 Notifications On';
+                btn.disabled = true;
             } catch (e) {
                 console.warn('Push registration failed', e);
+                alert('Could not enable notifications: ' + e.message);
             }
         }
 
