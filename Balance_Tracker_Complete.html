@@ -1256,6 +1256,14 @@
             }
         }
 
+        function toPrevFridayIfWeekend(year, month, day) {
+            const d = new Date(year, month - 1, day);
+            const dow = d.getDay();
+            if (dow === 6) return day - 1; // Saturday → Friday
+            if (dow === 0) return day - 2; // Sunday → Friday
+            return day;
+        }
+
         function getLastBusinessDay(year, month) {
             const lastDay = new Date(year, month, 0).getDate();
             const lastDate = new Date(year, month - 1, lastDay);
@@ -1320,7 +1328,10 @@
 
                     // Branch 1: Monthly with specific dayOfMonth
                     if (rt.frequency === 'monthly' && rt.dayOfMonth !== null && rt.dayOfMonth !== undefined) {
-                        applyToSpecificDay(rt, monthKey, rt.dayOfMonth);
+                        const actualDay = rt.id === 'paycheck-15th'
+                            ? toPrevFridayIfWeekend(year, monthNum, rt.dayOfMonth)
+                            : rt.dayOfMonth;
+                        applyToSpecificDay(rt, monthKey, actualDay);
                     }
                     // Branch 2: Monthly with null/undefined dayOfMonth = last business day of month
                     else if (rt.frequency === 'monthly' && (rt.dayOfMonth === null || rt.dayOfMonth === undefined)) {
