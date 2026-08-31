@@ -30,6 +30,7 @@ class Transaction(BaseModel):
     paymentMethod: Optional[str] = None
     goalId: Optional[str] = None
     recurringId: Optional[str] = None
+    recurring: Optional[bool] = False
 
 class SavingsGoal(BaseModel):
     name: str
@@ -46,6 +47,7 @@ class RecurringTransaction(BaseModel):
     startDate: str
     endDate: Optional[str] = None
     dayOfMonth: Optional[int] = None
+    weekday: Optional[int] = None  # 0=Sunday, 1=Monday, ... 6=Saturday
     paymentMethod: Optional[str] = None
 
 class TrackerData(BaseModel):
@@ -282,6 +284,20 @@ def add_recurring_transaction(recurring: RecurringTransaction):
     data["recurringTransactions"].append(recurring.dict())
     save_data(data)
     return {"message": "Recurring transaction created", "recurring": recurring}
+
+@app.put("/api/recurring-transactions/{recurring_id}")
+def update_recurring_transaction(recurring_id: str, recurring: RecurringTransaction):
+    """Update an existing recurring transaction"""
+    data = load_data()
+    for index, existing in enumerate(data["recurringTransactions"]):
+        if existing["id"] == recurring_id:
+            updated = recurring.dict()
+            updated["id"] = recurring_id
+            data["recurringTransactions"][index] = updated
+            save_data(data)
+            return {"message": "Recurring transaction updated", "recurring": updated}
+
+    raise HTTPException(status_code=404, detail="Recurring transaction not found")
 
 @app.delete("/api/recurring-transactions/{recurring_id}")
 def delete_recurring_transaction(recurring_id: str):

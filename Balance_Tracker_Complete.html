@@ -811,6 +811,49 @@
             min-height: 36px;
         }
 
+        .recurring-form-card {
+            background: var(--bg-tertiary);
+            padding: 1.25rem;
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+        }
+
+        .button-row,
+        .recurring-actions {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .btn-muted {
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+        }
+
+        .btn-danger {
+            background: var(--accent-expense);
+            border-color: var(--accent-expense);
+            color: #fff;
+        }
+
+        .recurring-actions {
+            margin-top: 0.75rem;
+        }
+
+        .recurring-actions .btn {
+            flex: 1;
+            min-width: 96px;
+            justify-content: center;
+        }
+
         .goal-card {
             background: var(--bg-tertiary);
             border-radius: 12px;
@@ -920,6 +963,7 @@
             .day-card { min-height: 58px; padding: 0.4rem 0.25rem; }
             .day-number { font-size: 0.85rem; }
             .day-balance-micro { font-size: 0.55rem; }
+            .form-row { grid-template-columns: 1fr; gap: 0; }
         }
 
         @media (hover: none) {
@@ -1132,8 +1176,9 @@
                 <button class="sheet-close" onclick="closeRecurringSheet()">×</button>
             </div>
 
-            <div style="background: var(--bg-tertiary); padding: 1.25rem; border-radius: 12px; margin-bottom: 1.5rem;">
-                <h3 style="margin-bottom: 1rem; color: var(--text-primary);">Create Recurring</h3>
+            <div class="recurring-form-card">
+                <input type="hidden" id="recurringEditingId">
+                <h3 id="recurringFormTitle" style="margin-bottom: 1rem; color: var(--text-primary);">Create Recurring</h3>
                 <div class="form-group">
                     <label class="form-label">Type</label>
                     <select class="form-select" id="recurringType">
@@ -1151,17 +1196,47 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">Frequency</label>
-                    <select class="form-select" id="recurringFrequency">
+                    <select class="form-select" id="recurringFrequency" onchange="updateRecurringForm()">
                         <option value="monthly">Monthly</option>
                         <option value="weekly">Weekly</option>
                         <option value="last-business-day">Last Business Day</option>
                     </select>
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Day of Month (for monthly)</label>
+                <div class="form-group" id="recurringMonthlyDayGroup">
+                    <label class="form-label">Day of Month</label>
                     <input type="number" min="1" max="31" class="form-input" id="recurringDay" placeholder="1-31">
                 </div>
-                <button class="btn btn-primary" onclick="createRecurring()" style="width: 100%;">Create Recurring</button>
+                <div class="form-group hidden" id="recurringWeekdayGroup">
+                    <label class="form-label">Day of Week</label>
+                    <select class="form-select" id="recurringWeekday">
+                        <option value="">Select weekday</option>
+                        <option value="0">Sunday</option>
+                        <option value="1">Monday</option>
+                        <option value="2">Tuesday</option>
+                        <option value="3">Wednesday</option>
+                        <option value="4">Thursday</option>
+                        <option value="5">Friday</option>
+                        <option value="6">Saturday</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Start Date</label>
+                        <input type="date" class="form-input" id="recurringStartDate">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">End Date</label>
+                        <input type="date" class="form-input" id="recurringEndDate">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Payment Method</label>
+                    <input type="text" class="form-input" id="recurringPaymentMethod" placeholder="e.g., direct deposit, card">
+                </div>
+                <div class="button-row">
+                    <button class="btn btn-primary" id="recurringSubmitBtn" onclick="saveRecurringFromForm()" style="flex: 1;">Create Recurring</button>
+                    <button class="btn btn-muted hidden" id="recurringCancelEditBtn" onclick="resetRecurringForm()">Cancel</button>
+                </div>
             </div>
 
             <div id="recurringList"></div>
@@ -1194,6 +1269,22 @@
             'January-2027', 'February-2027', 'March-2027', 'April-2027', 'May-2027', 'June-2027',
             'July-2027', 'August-2027', 'September-2027', 'October-2027', 'November-2027', 'December-2027'
         ];
+        const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+        const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const LEGACY_WEEKDAY_BY_ID = {
+            'husband-doordash-mon': 1,
+            'husband-doordash-tue': 2,
+            'husband-doordash-wed': 3,
+            'husband-doordash-thu': 4,
+            'husband-doordash-fri': 5
+        };
+        const LEGACY_WEEKLY_START_DATE_BY_ID = {
+            'husband-doordash-mon': '2026-06-15',
+            'husband-doordash-tue': '2026-06-16',
+            'husband-doordash-wed': '2026-06-17',
+            'husband-doordash-thu': '2026-06-18',
+            'husband-doordash-fri': '2026-06-19'
+        };
 
         // Removed RECURRING_DEFAULTS - backend API is the single source of truth
 
@@ -1212,7 +1303,7 @@
         const DOUBLE_TAP_MS = 300;
 
         const API = {
-            baseURL: '/api',
+            baseURL: window.location.protocol === 'file:' ? 'http://localhost:8000/api' : '/api',
 
             async fetch(endpoint, options = {}) {
                 try {
@@ -1244,6 +1335,26 @@
                     method: 'POST',
                     body: JSON.stringify(data)
                 });
+            },
+
+            async createRecurring(recurring) {
+                return await this.fetch('/recurring-transactions', {
+                    method: 'POST',
+                    body: JSON.stringify(recurring)
+                });
+            },
+
+            async updateRecurring(id, recurring) {
+                return await this.fetch(`/recurring-transactions/${encodeURIComponent(id)}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(recurring)
+                });
+            },
+
+            async deleteRecurring(id) {
+                return await this.fetch(`/recurring-transactions/${encodeURIComponent(id)}`, {
+                    method: 'DELETE'
+                });
             }
         };
 
@@ -1259,106 +1370,200 @@
             }
         }
 
-        function toPrevFridayIfWeekend(year, month, day) {
-            const d = new Date(year, month - 1, day);
-            const dow = d.getDay();
-            if (dow === 6) return day - 1; // Saturday → Friday
-            if (dow === 0) return day - 2; // Sunday → Friday
-            return day;
-        }
-
         function getLastBusinessDay(year, month) {
             const lastDay = new Date(year, month, 0).getDate();
             const lastDate = new Date(year, month - 1, lastDay);
             const dayOfWeek = lastDate.getDay();
-            // If Saturday (6), move back 1 day to Friday
             if (dayOfWeek === 6) return lastDay - 1;
-            // If Sunday (0), move back 2 days to Friday
             if (dayOfWeek === 0) return lastDay - 2;
-            // Otherwise it's a weekday, use it
             return lastDay;
         }
 
+        function parseLocalDate(value) {
+            if (!value) return null;
+            const [year, month, day] = String(value).split('-').map(Number);
+            if (!year || !month || !day) return null;
+            return new Date(year, month - 1, day);
+        }
+
+        function formatDateInput(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function getMonthParts(monthKey) {
+            const [monthName, yearStr] = monthKey.split('-');
+            return {
+                monthName,
+                monthNum: MONTH_NAMES.indexOf(monthName) + 1,
+                year: parseInt(yearStr, 10)
+            };
+        }
+
+        function inferWeekdayFromId(id) {
+            if (!id) return null;
+            return LEGACY_WEEKDAY_BY_ID[id] ?? null;
+        }
+
+        function inferWeekdayFromStartDate(startDate) {
+            const date = parseLocalDate(startDate);
+            return date ? date.getDay() : null;
+        }
+
+        function normalizeRecurringTransaction(rt, index = 0) {
+            if (!rt || !rt.description || !rt.type || !rt.amount) return null;
+
+            const normalized = { ...rt };
+            normalized.id = normalized.id || `recurring-${Date.now()}-${index}`;
+            normalized.amount = Number(normalized.amount);
+            normalized.frequency = normalized.frequency || 'monthly';
+
+            if (normalized.frequency === 'last-business-day') {
+                normalized.frequency = 'monthly';
+                normalized.dayOfMonth = null;
+            }
+
+            if (normalized.day !== undefined) {
+                normalized.dayOfMonth = Number(normalized.day) === -1 ? null : Number(normalized.day);
+                delete normalized.day;
+            }
+
+            if (normalized.dayOfMonth !== null && normalized.dayOfMonth !== undefined) {
+                normalized.dayOfMonth = Number(normalized.dayOfMonth);
+            } else if (normalized.frequency === 'monthly') {
+                normalized.dayOfMonth = null;
+            }
+
+            if (normalized.frequency === 'weekly') {
+                const weekdayFromId = inferWeekdayFromId(normalized.id);
+                const hadExplicitWeekday = normalized.weekday !== null && normalized.weekday !== undefined;
+                const existingWeekday = hadExplicitWeekday ? Number(normalized.weekday) : null;
+                const weekdayFromStart = inferWeekdayFromStartDate(normalized.startDate);
+                normalized.weekday = existingWeekday ?? weekdayFromId ?? weekdayFromStart;
+                normalized.dayOfMonth = null;
+
+                if (!hadExplicitWeekday && LEGACY_WEEKLY_START_DATE_BY_ID[normalized.id]) {
+                    normalized.startDate = LEGACY_WEEKLY_START_DATE_BY_ID[normalized.id];
+                }
+            } else {
+                normalized.weekday = null;
+            }
+
+            if (!normalized.startDate) {
+                normalized.startDate = formatDateInput(new Date());
+            }
+
+            normalized.endDate = normalized.endDate || null;
+            normalized.paymentMethod = normalized.paymentMethod || null;
+            return normalized;
+        }
+
+        function normalizeAllRecurringTransactions() {
+            const seen = new Set();
+            data.recurringTransactions = (data.recurringTransactions || [])
+                .map((rt, index) => normalizeRecurringTransaction(rt, index))
+                .filter(Boolean)
+                .filter(rt => {
+                    if (seen.has(rt.id)) return false;
+                    seen.add(rt.id);
+                    return true;
+                });
+        }
+
         function initializeData() {
-            MONTHS.forEach(month => {
-                data.months[month] = {};
-            });
-            // Removed RECURRING_DEFAULTS application - backend API is the only source
-            applyRecurringTransactions();
+            ensureMonths();
+            rebuildRecurringTransactions();
         }
 
         function applyToSpecificDay(rt, monthKey, day) {
+            const { monthNum, year } = getMonthParts(monthKey);
+            const dayNumber = Number(day);
+            const daysInMonth = new Date(year, monthNum, 0).getDate();
+            if (!dayNumber || dayNumber < 1 || dayNumber > daysInMonth) return;
+
+            const occurrenceDate = new Date(year, monthNum - 1, dayNumber);
+            const startDate = parseLocalDate(rt.startDate);
+            const endDate = parseLocalDate(rt.endDate);
+            if (startDate && occurrenceDate < startDate) return;
+            if (endDate && occurrenceDate > endDate) return;
+
             if (!data.months[monthKey][day]) {
                 data.months[monthKey][day] = [];
             }
 
             const exists = data.months[monthKey][day].some(t =>
-                t.description === rt.description &&
-                t.amount === rt.amount &&
-                t.type === rt.type &&
-                t.recurring === true
+                rt.id
+                    ? t.recurringId === rt.id
+                    : t.description === rt.description &&
+                        t.amount === rt.amount &&
+                        t.type === rt.type &&
+                        (t.recurring === true || t.recurringId)
             );
 
             if (!exists) {
-                data.months[monthKey][day].push({
+                const transaction = {
                     type: rt.type,
                     description: rt.description,
                     amount: rt.amount,
                     recurring: true,
-                    recurringId: rt.id || null
-                });
+                    recurringId: rt.id || null,
+                    timestamp: occurrenceDate.getTime()
+                };
+                if (rt.paymentMethod) transaction.paymentMethod = rt.paymentMethod;
+                data.months[monthKey][day].push(transaction);
             }
         }
 
-        function applyRecurringTransactions() {
+        function ensureMonths() {
             MONTHS.forEach(monthKey => {
-                const [monthName, yearStr] = monthKey.split('-');
-                const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-                const monthNum = monthNames.indexOf(monthName) + 1;
-                const year = parseInt(yearStr);
-                const daysInMonth = new Date(year, monthNum, 0).getDate();
+                if (!data.months[monthKey]) data.months[monthKey] = {};
+            });
+        }
 
-                if (!data.months[monthKey]) {
-                    data.months[monthKey] = {};
-                }
+        function isGeneratedRecurringTransaction(transaction) {
+            return transaction && (transaction.recurring === true || Boolean(transaction.recurringId));
+        }
 
-                data.recurringTransactions.forEach(rt => {
-                    // Check end date
-                    if (rt.endDate) {
-                        const endDate = new Date(rt.endDate);
-                        const currentDate = new Date(year, monthNum - 1, 1);
-                        if (currentDate > endDate) return;
+        function clearGeneratedRecurringTransactions() {
+            Object.keys(data.months || {}).forEach(monthKey => {
+                Object.keys(data.months[monthKey] || {}).forEach(day => {
+                    data.months[monthKey][day] = data.months[monthKey][day].filter(t => !isGeneratedRecurringTransaction(t));
+                    if (data.months[monthKey][day].length === 0) {
+                        delete data.months[monthKey][day];
                     }
+                });
+            });
+        }
 
-                    // Branch 1: Monthly with specific dayOfMonth
-                    if (rt.frequency === 'monthly' && rt.dayOfMonth !== null && rt.dayOfMonth !== undefined) {
-                        const actualDay = rt.id === 'paycheck-15th'
-                            ? toPrevFridayIfWeekend(year, monthNum, rt.dayOfMonth)
-                            : rt.dayOfMonth;
-                        // Remove stale entry on the original weekend day if we shifted
-                        if (actualDay !== rt.dayOfMonth && data.months[monthKey][rt.dayOfMonth]) {
-                            data.months[monthKey][rt.dayOfMonth] = data.months[monthKey][rt.dayOfMonth].filter(t =>
-                                !(t.description === rt.description && t.amount === rt.amount && t.type === rt.type && t.recurring === true)
-                            );
-                        }
-                        applyToSpecificDay(rt, monthKey, actualDay);
-                    }
-                    // Branch 2: Monthly with null/undefined dayOfMonth = last business day of month
-                    else if (rt.frequency === 'monthly' && (rt.dayOfMonth === null || rt.dayOfMonth === undefined)) {
-                        const lastBizDay = getLastBusinessDay(year, monthNum);
-                        applyToSpecificDay(rt, monthKey, lastBizDay);
-                    }
-                    // Branch 3: Weekly (apply to all matching weekdays in the month)
-                    else if (rt.frequency === 'weekly' && rt.startDate) {
-                        const startDate = new Date(rt.startDate);
-                        const targetWeekday = startDate.getDay(); // 0=Sun, 1=Mon, etc.
+        function rebuildRecurringTransactions() {
+            ensureMonths();
+            normalizeAllRecurringTransactions();
+            clearGeneratedRecurringTransactions();
+            applyRecurringTransactions();
+        }
 
+        function applyRecurringTransactions() {
+            ensureMonths();
+            data.recurringTransactions.forEach(rt => {
+                MONTHS.forEach(monthKey => {
+                    const { monthNum, year } = getMonthParts(monthKey);
+                    const daysInMonth = new Date(year, monthNum, 0).getDate();
+
+                    if (rt.frequency === 'weekly') {
+                        if (rt.weekday === null || rt.weekday === undefined) return;
                         for (let day = 1; day <= daysInMonth; day++) {
                             const date = new Date(year, monthNum - 1, day);
-                            if (date.getDay() === targetWeekday) {
+                            if (date.getDay() === Number(rt.weekday)) {
                                 applyToSpecificDay(rt, monthKey, day);
                             }
                         }
+                    } else if (rt.frequency === 'monthly') {
+                        const day = rt.dayOfMonth === null || rt.dayOfMonth === undefined
+                            ? getLastBusinessDay(year, monthNum)
+                            : Math.min(Number(rt.dayOfMonth), daysInMonth);
+                        applyToSpecificDay(rt, monthKey, day);
                     }
                 });
             });
@@ -1393,13 +1598,7 @@
                 }
             }
 
-            // Ensure all months exist without wiping existing entries
-            MONTHS.forEach(month => {
-                if (!data.months[month]) data.months[month] = {};
-            });
-
-            // Apply recurring transactions to populate calendar
-            applyRecurringTransactions();
+            rebuildRecurringTransactions();
 
             // Save the updated structure
             await saveData();
@@ -1781,7 +1980,7 @@
 
         function openSavingsSheet()    { renderGoalsList(); openSheet('savingsSheet'); }
         function closeSavingsSheet()   { closeSheet('savingsSheet'); }
-        function openRecurringSheet()  { renderRecurringList(); openSheet('recurringSheet'); }
+        function openRecurringSheet()  { resetRecurringForm(); renderRecurringList(); openSheet('recurringSheet'); }
         function closeRecurringSheet() { closeSheet('recurringSheet'); }
         function openSettingsSheet()   { document.getElementById('startingBalance').value = data.startingBalance || 0; openSheet('settingsSheet'); }
         function closeSettingsSheet()  { closeSheet('settingsSheet'); }
@@ -1972,7 +2171,9 @@
                     meta.appendChild(badge);
                 }
 
-                if (t.recurring) {
+                const isRecurring = isGeneratedRecurringTransaction(t);
+
+                if (isRecurring) {
                     const badge = document.createElement('span');
                     badge.className = 'meta-badge';
                     badge.textContent = 'Recurring';
@@ -1983,7 +2184,7 @@
                 item.appendChild(desc);
                 item.appendChild(meta);
 
-                if (!t.recurring) {
+                if (!isRecurring) {
                     const deleteBtn = document.createElement('button');
                     deleteBtn.className = 'delete-btn';
                     deleteBtn.textContent = 'Delete';
@@ -2034,19 +2235,7 @@
                 recurringId ? rt.id !== recurringId : !(rt.description === recurringId && rt.amount === amount && rt.type === type)
             );
 
-            // Remove all occurrences from every month
-            Object.keys(data.months).forEach(monthKey => {
-                Object.keys(data.months[monthKey]).forEach(day => {
-                    data.months[monthKey][day] = data.months[monthKey][day].filter(t => {
-                        if (!t.recurring) return true;
-                        if (recurringId) return t.recurringId !== recurringId;
-                        return !(t.description === recurringId && t.amount === amount && t.type === type);
-                    });
-                    if (data.months[monthKey][day].length === 0) {
-                        delete data.months[monthKey][day];
-                    }
-                });
-            });
+            rebuildRecurringTransactions();
 
             await saveData();
             renderTransactionList();
@@ -2172,35 +2361,137 @@
         function openRecurringModal()   { openRecurringSheet(); }
         function closeRecurringModal()  { closeRecurringSheet(); }
 
-        async function createRecurring() {
-            const type = document.getElementById('recurringType').value;
-            const description = document.getElementById('recurringDesc').value;
-            const amount = parseFloat(document.getElementById('recurringAmount').value);
+        function updateRecurringForm() {
             const frequency = document.getElementById('recurringFrequency').value;
-            const day = parseInt(document.getElementById('recurringDay').value);
+            const monthlyGroup = document.getElementById('recurringMonthlyDayGroup');
+            const weekdayGroup = document.getElementById('recurringWeekdayGroup');
 
-            if (!description || !amount) {
-                alert('Please fill in all fields');
-                return;
+            monthlyGroup.classList.toggle('hidden', frequency !== 'monthly');
+            weekdayGroup.classList.toggle('hidden', frequency !== 'weekly');
+        }
+
+        function resetRecurringForm() {
+            document.getElementById('recurringEditingId').value = '';
+            document.getElementById('recurringFormTitle').textContent = 'Create Recurring';
+            document.getElementById('recurringSubmitBtn').textContent = 'Create Recurring';
+            document.getElementById('recurringCancelEditBtn').classList.add('hidden');
+            document.getElementById('recurringType').value = 'income';
+            document.getElementById('recurringDesc').value = '';
+            document.getElementById('recurringAmount').value = '';
+            document.getElementById('recurringFrequency').value = 'monthly';
+            document.getElementById('recurringDay').value = '';
+            document.getElementById('recurringWeekday').value = '';
+            document.getElementById('recurringStartDate').value = formatDateInput(new Date());
+            document.getElementById('recurringEndDate').value = '';
+            document.getElementById('recurringPaymentMethod').value = '';
+            updateRecurringForm();
+        }
+
+        function buildRecurringFromForm() {
+            const editingId = document.getElementById('recurringEditingId').value;
+            const type = document.getElementById('recurringType').value;
+            const description = document.getElementById('recurringDesc').value.trim();
+            const amount = parseFloat(document.getElementById('recurringAmount').value);
+            const selectedFrequency = document.getElementById('recurringFrequency').value;
+            const day = parseInt(document.getElementById('recurringDay').value, 10);
+            const weekday = parseInt(document.getElementById('recurringWeekday').value, 10);
+            const startDate = document.getElementById('recurringStartDate').value || formatDateInput(new Date());
+            const endDate = document.getElementById('recurringEndDate').value || null;
+            const paymentMethod = document.getElementById('recurringPaymentMethod').value.trim() || null;
+
+            if (!description || !Number.isFinite(amount) || amount <= 0) {
+                alert('Please enter a description and a valid amount.');
+                return null;
             }
 
-            const recurring = {
+            if (selectedFrequency === 'monthly' && (!Number.isInteger(day) || day < 1 || day > 31)) {
+                alert('Please enter a day of month from 1 to 31.');
+                return null;
+            }
+
+            if (selectedFrequency === 'weekly' && (!Number.isInteger(weekday) || weekday < 0 || weekday > 6)) {
+                alert('Please select a day of the week.');
+                return null;
+            }
+
+            if (endDate && parseLocalDate(endDate) < parseLocalDate(startDate)) {
+                alert('End date cannot be before the start date.');
+                return null;
+            }
+
+            return normalizeRecurringTransaction({
+                id: editingId || `recurring-${Date.now()}`,
                 type,
                 description,
                 amount,
-                frequency,
-                day: frequency === 'last-business-day' ? -1 : day
-            };
+                frequency: selectedFrequency === 'weekly' ? 'weekly' : 'monthly',
+                startDate,
+                endDate,
+                dayOfMonth: selectedFrequency === 'monthly' ? day : null,
+                weekday: selectedFrequency === 'weekly' ? weekday : null,
+                paymentMethod
+            });
+        }
 
-            data.recurringTransactions.push(recurring);
-            applyRecurringTransactions();
+        async function saveRecurringFromForm() {
+            const recurring = buildRecurringFromForm();
+            if (!recurring) return;
+
+            const editingId = document.getElementById('recurringEditingId').value;
+            if (editingId) {
+                data.recurringTransactions = data.recurringTransactions.map(rt => rt.id === editingId ? recurring : rt);
+            } else {
+                data.recurringTransactions.push(recurring);
+            }
+
+            rebuildRecurringTransactions();
             await saveData();
             renderRecurringList();
             renderCalendar();
+            updateBalance();
+            resetRecurringForm();
+        }
 
-            document.getElementById('recurringDesc').value = '';
-            document.getElementById('recurringAmount').value = '';
-            document.getElementById('recurringDay').value = '';
+        async function createRecurring() {
+            await saveRecurringFromForm();
+        }
+
+        function editRecurring(recurringId) {
+            const recurring = data.recurringTransactions.find(rt => rt.id === recurringId);
+            if (!recurring) return;
+
+            const formFrequency = recurring.frequency === 'weekly'
+                ? 'weekly'
+                : recurring.dayOfMonth === null || recurring.dayOfMonth === undefined
+                    ? 'last-business-day'
+                    : 'monthly';
+
+            document.getElementById('recurringEditingId').value = recurring.id;
+            document.getElementById('recurringFormTitle').textContent = 'Edit Recurring';
+            document.getElementById('recurringSubmitBtn').textContent = 'Save Changes';
+            document.getElementById('recurringCancelEditBtn').classList.remove('hidden');
+            document.getElementById('recurringType').value = recurring.type;
+            document.getElementById('recurringDesc').value = recurring.description;
+            document.getElementById('recurringAmount').value = recurring.amount;
+            document.getElementById('recurringFrequency').value = formFrequency;
+            document.getElementById('recurringDay').value = recurring.dayOfMonth || '';
+            document.getElementById('recurringWeekday').value = recurring.weekday ?? '';
+            document.getElementById('recurringStartDate').value = recurring.startDate || formatDateInput(new Date());
+            document.getElementById('recurringEndDate').value = recurring.endDate || '';
+            document.getElementById('recurringPaymentMethod').value = recurring.paymentMethod || '';
+            updateRecurringForm();
+            document.getElementById('recurringSheet').scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function getRecurringScheduleLabel(recurring) {
+            if (recurring.frequency === 'weekly') {
+                const weekday = Number(recurring.weekday);
+                return Number.isInteger(weekday) && WEEKDAYS[weekday] ? `Every ${WEEKDAYS[weekday]}` : 'Weekly';
+            }
+            if (recurring.dayOfMonth === null || recurring.dayOfMonth === undefined) {
+                return 'Last business day';
+            }
+            return `Day ${recurring.dayOfMonth}`;
         }
 
         function renderRecurringList() {
@@ -2225,15 +2516,28 @@
                     </div>
                     <div class="transaction-desc">${r.description}</div>
                     <div class="transaction-meta">
-                        <span class="meta-badge">${r.frequency}</span>
-                        ${r.dayOfMonth ? `<span class="meta-badge">Day ${r.dayOfMonth}</span>` : ''}
+                        <span class="meta-badge">${getRecurringScheduleLabel(r)}</span>
+                        ${r.startDate ? `<span class="meta-badge">Starts ${r.startDate}</span>` : ''}
+                        ${r.endDate ? `<span class="meta-badge">Ends ${r.endDate}</span>` : ''}
+                        ${r.paymentMethod ? `<span class="meta-badge">${r.paymentMethod}</span>` : ''}
                     </div>
                 `;
+                const actions = document.createElement('div');
+                actions.className = 'recurring-actions';
+
+                const editBtn = document.createElement('button');
+                editBtn.className = 'btn btn-muted btn-small';
+                editBtn.textContent = 'Edit';
+                editBtn.onclick = () => editRecurring(r.id);
+
                 const deleteBtn = document.createElement('button');
-                deleteBtn.className = 'delete-btn';
-                deleteBtn.textContent = 'Delete Recurring';
+                deleteBtn.className = 'btn btn-danger btn-small';
+                deleteBtn.textContent = 'Delete';
                 deleteBtn.onclick = () => deleteRecurringAll(r.id, r.amount, r.type);
-                item.appendChild(deleteBtn);
+
+                actions.appendChild(editBtn);
+                actions.appendChild(deleteBtn);
+                item.appendChild(actions);
                 list.appendChild(item);
             });
         }
@@ -2268,6 +2572,7 @@
                 try {
                     const imported = JSON.parse(e.target.result);
                     data = imported;
+                    rebuildRecurringTransactions();
                     await saveData();
                     renderMonthTabs();
                     renderCalendar();
@@ -2290,8 +2595,7 @@
 
         function goToToday() {
             const today = new Date();
-            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-            const monthName = monthNames[today.getMonth()];
+            const monthName = MONTH_NAMES[today.getMonth()];
             const year = today.getFullYear();
             const targetMonth = `${monthName}-${year}`;
 
@@ -2366,6 +2670,10 @@
             const savedTheme = localStorage.getItem('theme') || 'dark';
             document.documentElement.setAttribute('data-theme', savedTheme);
             document.getElementById('themeIcon').textContent = savedTheme === 'light' ? '🌙' : '☀️';
+
+            const today = new Date();
+            const todayMonth = `${MONTH_NAMES[today.getMonth()]}-${today.getFullYear()}`;
+            if (MONTHS.includes(todayMonth)) currentMonth = todayMonth;
 
             await loadData();
             renderMonthTabs();
