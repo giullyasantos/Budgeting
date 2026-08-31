@@ -857,6 +857,42 @@
             justify-content: center;
         }
 
+        .weekday-picker {
+            display: grid;
+            grid-template-columns: repeat(7, minmax(0, 1fr));
+            gap: 0.35rem;
+        }
+
+        .weekday-choice {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 44px;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            background: var(--bg-primary);
+            color: var(--text-secondary);
+            font-size: 0.72rem;
+            font-weight: 700;
+            cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        .weekday-choice input {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .weekday-choice:has(input:checked) {
+            background: rgba(0, 216, 127, 0.18);
+            border-color: var(--accent-primary);
+            color: var(--accent-primary);
+        }
+
         .goal-card {
             background: var(--bg-tertiary);
             border-radius: 12px;
@@ -967,6 +1003,7 @@
             .day-number { font-size: 0.85rem; }
             .day-balance-micro { font-size: 0.55rem; }
             .form-row { grid-template-columns: 1fr; gap: 0; }
+            .weekday-picker { grid-template-columns: repeat(4, minmax(0, 1fr)); }
         }
 
         @media (hover: none) {
@@ -1210,17 +1247,16 @@
                     <input type="number" min="1" max="31" class="form-input" id="recurringDay" placeholder="1-31">
                 </div>
                 <div class="form-group hidden" id="recurringWeekdayGroup">
-                    <label class="form-label">Day of Week</label>
-                    <select class="form-select" id="recurringWeekday">
-                        <option value="">Select weekday</option>
-                        <option value="0">Sunday</option>
-                        <option value="1">Monday</option>
-                        <option value="2">Tuesday</option>
-                        <option value="3">Wednesday</option>
-                        <option value="4">Thursday</option>
-                        <option value="5">Friday</option>
-                        <option value="6">Saturday</option>
-                    </select>
+                    <label class="form-label">Days of Week</label>
+                    <div class="weekday-picker" id="recurringWeekdays">
+                        <label class="weekday-choice"><input type="checkbox" name="recurringWeekday" value="0">Sun</label>
+                        <label class="weekday-choice"><input type="checkbox" name="recurringWeekday" value="1">Mon</label>
+                        <label class="weekday-choice"><input type="checkbox" name="recurringWeekday" value="2">Tue</label>
+                        <label class="weekday-choice"><input type="checkbox" name="recurringWeekday" value="3">Wed</label>
+                        <label class="weekday-choice"><input type="checkbox" name="recurringWeekday" value="4">Thu</label>
+                        <label class="weekday-choice"><input type="checkbox" name="recurringWeekday" value="5">Fri</label>
+                        <label class="weekday-choice"><input type="checkbox" name="recurringWeekday" value="6">Sat</label>
+                    </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
@@ -1420,6 +1456,25 @@
             return date ? date.getDay() : null;
         }
 
+        function normalizeWeekdayList(values) {
+            const list = Array.isArray(values) ? values : [];
+            return [...new Set(
+                list
+                    .map(value => Number(value))
+                    .filter(value => Number.isInteger(value) && value >= 0 && value <= 6)
+            )].sort((a, b) => a - b);
+        }
+
+        function getRecurringWeekdays(recurring) {
+            const explicitDays = normalizeWeekdayList(recurring.weekdays);
+            if (explicitDays.length > 0) return explicitDays;
+
+            const singleDay = recurring.weekday !== null && recurring.weekday !== undefined
+                ? Number(recurring.weekday)
+                : null;
+            return Number.isInteger(singleDay) && singleDay >= 0 && singleDay <= 6 ? [singleDay] : [];
+        }
+
         function normalizeRecurringTransaction(rt, index = 0) {
             if (!rt || !rt.description || !rt.type || !rt.amount) return null;
 
@@ -1449,7 +1504,15 @@
                 const hadExplicitWeekday = normalized.weekday !== null && normalized.weekday !== undefined;
                 const existingWeekday = hadExplicitWeekday ? Number(normalized.weekday) : null;
                 const weekdayFromStart = inferWeekdayFromStartDate(normalized.startDate);
-                normalized.weekday = existingWeekday ?? weekdayFromId ?? weekdayFromStart;
+                const weekdayFallback = existingWeekday ?? weekdayFromId ?? weekdayFromStart;
+                normalized.weekdays = normalizeWeekdayList(
+                    normalizeWeekdayList(normalized.weekdays).length > 0
+                        ? normalized.weekdays
+                        : weekdayFallback !== null && weekdayFallback !== undefined
+                            ? [weekdayFallback]
+                            : []
+                );
+                normalized.weekday = normalized.weekdays.length === 1 ? normalized.weekdays[0] : null;
                 normalized.dayOfMonth = null;
 
                 if (!hadExplicitWeekday && LEGACY_WEEKLY_START_DATE_BY_ID[normalized.id]) {
@@ -1457,6 +1520,7 @@
                 }
             } else {
                 normalized.weekday = null;
+                normalized.weekdays = [];
             }
 
             if (!normalized.startDate) {
@@ -1592,10 +1656,11 @@
                     const daysInMonth = new Date(year, monthNum, 0).getDate();
 
                     if (rt.frequency === 'weekly') {
-                        if (rt.weekday === null || rt.weekday === undefined) return;
+                        const weekdays = getRecurringWeekdays(rt);
+                        if (weekdays.length === 0) return;
                         for (let day = 1; day <= daysInMonth; day++) {
                             const date = new Date(year, monthNum - 1, day);
-                            if (date.getDay() === Number(rt.weekday)) {
+                            if (weekdays.includes(date.getDay())) {
                                 applyToSpecificDay(rt, monthKey, day);
                             }
                         }
@@ -2455,6 +2520,19 @@
             weekdayGroup.classList.toggle('hidden', frequency !== 'weekly');
         }
 
+        function getSelectedRecurringWeekdays() {
+            return [...document.querySelectorAll('input[name="recurringWeekday"]:checked')]
+                .map(input => Number(input.value))
+                .filter(value => Number.isInteger(value) && value >= 0 && value <= 6);
+        }
+
+        function setSelectedRecurringWeekdays(weekdays) {
+            const selected = new Set(normalizeWeekdayList(weekdays));
+            document.querySelectorAll('input[name="recurringWeekday"]').forEach(input => {
+                input.checked = selected.has(Number(input.value));
+            });
+        }
+
         function resetRecurringForm() {
             document.getElementById('recurringEditingId').value = '';
             document.getElementById('recurringFormTitle').textContent = 'Create Recurring';
@@ -2465,7 +2543,7 @@
             document.getElementById('recurringAmount').value = '';
             document.getElementById('recurringFrequency').value = 'monthly';
             document.getElementById('recurringDay').value = '';
-            document.getElementById('recurringWeekday').value = '';
+            setSelectedRecurringWeekdays([]);
             document.getElementById('recurringStartDate').value = formatDateInput(new Date());
             document.getElementById('recurringEndDate').value = '';
             document.getElementById('recurringPaymentMethod').value = '';
@@ -2479,7 +2557,7 @@
             const amount = parseFloat(document.getElementById('recurringAmount').value);
             const selectedFrequency = document.getElementById('recurringFrequency').value;
             const day = parseInt(document.getElementById('recurringDay').value, 10);
-            const weekday = parseInt(document.getElementById('recurringWeekday').value, 10);
+            const weekdays = getSelectedRecurringWeekdays();
             const startDate = document.getElementById('recurringStartDate').value || formatDateInput(new Date());
             const endDate = document.getElementById('recurringEndDate').value || null;
             const paymentMethod = document.getElementById('recurringPaymentMethod').value.trim() || null;
@@ -2494,8 +2572,8 @@
                 return null;
             }
 
-            if (selectedFrequency === 'weekly' && (!Number.isInteger(weekday) || weekday < 0 || weekday > 6)) {
-                alert('Please select a day of the week.');
+            if (selectedFrequency === 'weekly' && weekdays.length === 0) {
+                alert('Please select at least one day of the week.');
                 return null;
             }
 
@@ -2517,7 +2595,8 @@
                 startDate,
                 endDate,
                 dayOfMonth: selectedFrequency === 'monthly' ? day : null,
-                weekday: selectedFrequency === 'weekly' ? weekday : null,
+                weekday: selectedFrequency === 'weekly' && weekdays.length === 1 ? weekdays[0] : null,
+                weekdays: selectedFrequency === 'weekly' ? weekdays : [],
                 paymentMethod,
                 skippedDates: existing?.skippedDates || []
             });
@@ -2565,7 +2644,7 @@
             document.getElementById('recurringAmount').value = recurring.amount;
             document.getElementById('recurringFrequency').value = formFrequency;
             document.getElementById('recurringDay').value = recurring.dayOfMonth || '';
-            document.getElementById('recurringWeekday').value = recurring.weekday ?? '';
+            setSelectedRecurringWeekdays(getRecurringWeekdays(recurring));
             document.getElementById('recurringStartDate').value = recurring.startDate || formatDateInput(new Date());
             document.getElementById('recurringEndDate').value = recurring.endDate || '';
             document.getElementById('recurringPaymentMethod').value = recurring.paymentMethod || '';
@@ -2575,8 +2654,9 @@
 
         function getRecurringScheduleLabel(recurring) {
             if (recurring.frequency === 'weekly') {
-                const weekday = Number(recurring.weekday);
-                return Number.isInteger(weekday) && WEEKDAYS[weekday] ? `Every ${WEEKDAYS[weekday]}` : 'Weekly';
+                const weekdays = getRecurringWeekdays(recurring);
+                const labels = weekdays.map(day => WEEKDAYS[day]?.slice(0, 3)).filter(Boolean);
+                return labels.length > 0 ? `Every ${labels.join(', ')}` : 'Weekly';
             }
             if (recurring.dayOfMonth === null || recurring.dayOfMonth === undefined) {
                 return 'Last business day';

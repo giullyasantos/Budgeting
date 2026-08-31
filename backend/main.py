@@ -48,6 +48,7 @@ class RecurringTransaction(BaseModel):
     endDate: Optional[str] = None
     dayOfMonth: Optional[int] = None
     weekday: Optional[int] = None  # 0=Sunday, 1=Monday, ... 6=Saturday
+    weekdays: Optional[List[int]] = []  # Multiple weekly days, 0=Sunday ... 6=Saturday
     paymentMethod: Optional[str] = None
     skippedDates: Optional[List[str]] = []
 
