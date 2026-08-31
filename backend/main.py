@@ -49,6 +49,7 @@ class RecurringTransaction(BaseModel):
     dayOfMonth: Optional[int] = None
     weekday: Optional[int] = None  # 0=Sunday, 1=Monday, ... 6=Saturday
     paymentMethod: Optional[str] = None
+    skippedDates: Optional[List[str]] = []
 
 class TrackerData(BaseModel):
     startingBalance: float

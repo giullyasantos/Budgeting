@@ -614,6 +614,8 @@
             transition: transform 0.38s var(--transition-spring);
             padding-bottom: env(safe-area-inset-bottom, 1rem);
             will-change: transform;
+            overscroll-behavior-y: contain;
+            touch-action: pan-y;
         }
 
         .bottom-sheet.open {
@@ -627,6 +629,7 @@
             border-radius: 2px;
             margin: 0.75rem auto 0;
             flex-shrink: 0;
+            touch-action: none;
         }
 
         .sheet-inner {
@@ -1402,6 +1405,11 @@
             };
         }
 
+        function getDateKey(monthKey, day) {
+            const { monthNum, year } = getMonthParts(monthKey);
+            return `${year}-${String(monthNum).padStart(2, '0')}-${String(Number(day)).padStart(2, '0')}`;
+        }
+
         function inferWeekdayFromId(id) {
             if (!id) return null;
             return LEGACY_WEEKDAY_BY_ID[id] ?? null;
@@ -1457,6 +1465,9 @@
 
             normalized.endDate = normalized.endDate || null;
             normalized.paymentMethod = normalized.paymentMethod || null;
+            normalized.skippedDates = Array.isArray(normalized.skippedDates)
+                ? [...new Set(normalized.skippedDates)].sort()
+                : [];
             return normalized;
         }
 
@@ -1486,8 +1497,10 @@
             const occurrenceDate = new Date(year, monthNum - 1, dayNumber);
             const startDate = parseLocalDate(rt.startDate);
             const endDate = parseLocalDate(rt.endDate);
+            const dateKey = getDateKey(monthKey, dayNumber);
             if (startDate && occurrenceDate < startDate) return;
             if (endDate && occurrenceDate > endDate) return;
+            if ((rt.skippedDates || []).includes(dateKey)) return;
 
             if (!data.months[monthKey][day]) {
                 data.months[monthKey][day] = [];
@@ -1524,6 +1537,33 @@
 
         function isGeneratedRecurringTransaction(transaction) {
             return transaction && (transaction.recurring === true || Boolean(transaction.recurringId));
+        }
+
+        function findRecurringRuleForTransaction(transaction) {
+            if (!transaction) return null;
+            if (transaction.recurringId) {
+                const byId = data.recurringTransactions.find(rt => rt.id === transaction.recurringId);
+                if (byId) return byId;
+            }
+            return data.recurringTransactions.find(rt =>
+                rt.description === transaction.description &&
+                rt.type === transaction.type &&
+                Number(rt.amount) === Number(transaction.amount)
+            ) || null;
+        }
+
+        function skipRecurringOccurrence(transaction, monthKey, day) {
+            const recurring = findRecurringRuleForTransaction(transaction);
+            if (!recurring) return;
+
+            const dateKey = getDateKey(monthKey, day);
+            if (!Array.isArray(recurring.skippedDates)) {
+                recurring.skippedDates = [];
+            }
+            if (!recurring.skippedDates.includes(dateKey)) {
+                recurring.skippedDates.push(dateKey);
+                recurring.skippedDates.sort();
+            }
         }
 
         function clearGeneratedRecurringTransactions() {
@@ -1997,15 +2037,55 @@
         function initSheetSwipe() {
             document.querySelectorAll('.bottom-sheet').forEach(sheet => {
                 let startY = 0;
-                sheet.addEventListener('touchstart', e => { startY = e.touches[0].clientY; }, { passive: true });
-                sheet.addEventListener('touchmove', e => {
-                    const d = e.touches[0].clientY - startY;
-                    if (d > 0) sheet.style.transform = `translateY(${d}px)`;
+                let startX = 0;
+                let startScrollTop = 0;
+                let isDraggingSheet = false;
+                let startedOnHandle = false;
+
+                sheet.addEventListener('touchstart', e => {
+                    const touch = e.touches[0];
+                    startY = touch.clientY;
+                    startX = touch.clientX;
+                    startScrollTop = sheet.scrollTop;
+                    isDraggingSheet = false;
+                    startedOnHandle = Boolean(e.target.closest('.sheet-handle'));
                 }, { passive: true });
+
+                sheet.addEventListener('touchmove', e => {
+                    const touch = e.touches[0];
+                    const dy = touch.clientY - startY;
+                    const dx = touch.clientX - startX;
+                    const mostlyVertical = Math.abs(dy) > Math.abs(dx) * 1.25;
+
+                    if (!isDraggingSheet) {
+                        const canCloseFromContent = startScrollTop <= 0 && sheet.scrollTop <= 0;
+                        const shouldStartDrag = dy > 12 && mostlyVertical && (startedOnHandle || canCloseFromContent);
+                        if (!shouldStartDrag) return;
+
+                        isDraggingSheet = true;
+                        sheet.style.transition = 'none';
+                    }
+
+                    if (dy > 0) {
+                        e.preventDefault();
+                        sheet.style.transform = `translateY(${dy}px)`;
+                    }
+                }, { passive: false });
+
                 sheet.addEventListener('touchend', e => {
                     const d = e.changedTouches[0].clientY - startY;
+                    if (!isDraggingSheet) return;
+
+                    isDraggingSheet = false;
+                    sheet.style.transition = '';
                     sheet.style.transform = '';
                     if (d > 100) closeSheet(sheet.id);
+                }, { passive: true });
+
+                sheet.addEventListener('touchcancel', () => {
+                    isDraggingSheet = false;
+                    sheet.style.transition = '';
+                    sheet.style.transform = '';
                 }, { passive: true });
             });
         }
@@ -2215,6 +2295,11 @@
         }
 
         async function deleteTransaction(index) {
+            const transaction = data.months[currentMonth][selectedDay][index];
+            if (isGeneratedRecurringTransaction(transaction)) {
+                skipRecurringOccurrence(transaction, currentMonth, selectedDay);
+            }
+
             data.months[currentMonth][selectedDay].splice(index, 1);
             if (data.months[currentMonth][selectedDay].length === 0) {
                 delete data.months[currentMonth][selectedDay];
@@ -2419,6 +2504,10 @@
                 return null;
             }
 
+            const existing = editingId
+                ? data.recurringTransactions.find(rt => rt.id === editingId)
+                : null;
+
             return normalizeRecurringTransaction({
                 id: editingId || `recurring-${Date.now()}`,
                 type,
@@ -2429,7 +2518,8 @@
                 endDate,
                 dayOfMonth: selectedFrequency === 'monthly' ? day : null,
                 weekday: selectedFrequency === 'weekly' ? weekday : null,
-                paymentMethod
+                paymentMethod,
+                skippedDates: existing?.skippedDates || []
             });
         }
 
